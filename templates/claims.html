@@ -1,0 +1,54 @@
+{% extends "base.html" %}{% from "_macros.html" import badge %}
+{% block title %}Реестр рекламаций{% endblock %}
+{% block body %}
+<div class="head">
+  <h1>Реестр рекламаций</h1><div class="grow"></div>
+  <a class="btn" href="{{ url_for('claims_export', **request.args) }}">⭳ Выгрузить в Excel</a>
+</div>
+<div class="views">
+  {% for k,(label,_) in views.items() %}
+  <a class="{{ 'on' if f.view==k }} {{ 'alert' if k=='overdue' and counts[k] }}" href="{{ url_for('claims', view=k) }}">{{ label }}<b>{{ counts[k] }}</b></a>
+  {% endfor %}
+</div>
+<div class="panel">
+  <form class="filters" method="get" id="ff">
+    <input type="hidden" name="view" value="{{ f.view }}">
+    <input type="search" name="q" value="{{ f.q }}" placeholder="Поиск: номер, компания, адрес, зав. №, MELBSSL-…" autofocus>
+    <select name="status" onchange="ff.submit()"><option value="">Все статусы</option>
+      {% for s in statuses %}<option {{ 'selected' if f.status==s.name }}>{{ s.name }}</option>{% endfor %}</select>
+    <select name="resp" onchange="ff.submit()"><option value="">Все ответственные</option><option value="none" {{ 'selected' if f.responsible=='none' }}>— не назначен</option>
+      {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if f.responsible==u.id|string }}>{{ u.name }}</option>{% endfor %}</select>
+    <select name="node" onchange="ff.submit()"><option value="">Все узлы</option>
+      {% for v in lists.get('node', []) %}<option {{ 'selected' if f.node==v }}>{{ v }}</option>{% endfor %}</select>
+    <select name="year" onchange="ff.submit()"><option value="">Все годы</option>
+      {% for y in years %}<option {{ 'selected' if f.year==y|string }}>{{ y }}</option>{% endfor %}</select>
+    <button class="btn">Найти</button>
+    {% if f.q or f.status or f.responsible or f.node or f.year %}<a class="btn ghost" href="{{ url_for('claims', view=f.view) }}">Сбросить</a>{% endif %}
+  </form>
+  {% if rows %}
+  <div class="tablewrap"><table class="t">
+    <thead><tr><th>Номер</th><th>Поступила</th><th>Компания / объект</th><th>Зав. №</th><th>Узел / дефект</th><th>Статус</th><th>Ответственный</th><th class="r">Дней</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      {% set od = r.deadline and r.deadline < today and r.grp not in ('closed','rejected') %}
+      <tr onclick="location='{{ url_for('claim', cid=r.id) }}'">
+        <td class="num"><a href="{{ url_for('claim', cid=r.id) }}">{{ r.number }}</a>{% if r.tracker_key %}<div class="small faint">{{ r.tracker_key }}</div>{% endif %}</td>
+        <td>{{ r.received_date|d }}</td>
+        <td class="clip"><b>{{ r.company or '—' }}</b>{% if r.ownership=='ПИК' %} <span class="small muted">ПИК</span>{% endif %}<div class="small muted clip">{{ r.address or '' }}</div></td>
+        <td class="small">{{ (r.serials or '')[:24] }}</td>
+        <td class="clip">{{ r.node or '' }}<div class="small muted clip">{{ (r.description or '')[:120] }}</div></td>
+        <td>{{ badge(r.status, r.grp) }}</td>
+        <td>{{ r.responsible or '' }}{% if not r.responsible and r.grp not in ('closed','rejected') %}<span class="small" style="color:var(--warn)">не назначен</span>{% endif %}</td>
+        <td class="r {{ 'overdue' if od }}" title="{{ 'Просрочено, срок ' ~ (r.deadline|d) if od }}">{{ r.days if r.days is not none }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <div class="pager"><span class="muted small">Найдено: {{ total }}</span>
+    {% if page>1 %}<a class="btn sm" href="{{ url_for('claims', **dict(request.args, page=page-1)) }}">←</a>{% endif %}
+    <span class="small">стр. {{ page }} из {{ pages }}</span>
+    {% if page<pages %}<a class="btn sm" href="{{ url_for('claims', **dict(request.args, page=page+1)) }}">→</a>{% endif %}
+  </div>
+  {% else %}<div class="empty">Ничего не найдено</div>{% endif %}
+</div>
+{% endblock %}

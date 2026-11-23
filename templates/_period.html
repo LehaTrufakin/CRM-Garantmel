@@ -1,0 +1,10 @@
+<form class="period" method="get">
+  {% if dim is defined %}<input type="hidden" name="dim" value="{{ dim }}">{% endif %}
+  {% for k, l in [('month','Месяц'),('quarter','Квартал'),('year','Год'),('12m','12 мес.')] %}
+    <a class="{{ 'on' if preset==k and not request.args.get('from') }}" href="?p={{ k }}&own={{ own }}{{ '&dim=' ~ dim if dim is defined }}">{{ l }}</a>
+  {% endfor %}
+  <input type="date" name="from" value="{{ f }}"> – <input type="date" name="to" value="{{ t }}">
+  <select name="own" style="width:auto"><option value="">ПИК + сторонние</option>
+    <option {{ 'selected' if own=='ПИК' }}>ПИК</option><option {{ 'selected' if own=='Сторонние' }}>Сторонние</option></select>
+  <button class="btn sm">Показать</button>
+</form>

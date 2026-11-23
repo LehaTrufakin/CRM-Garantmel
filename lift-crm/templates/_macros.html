@@ -1,0 +1,19 @@
+{% macro badge(name, grp) -%}<span class="badge g-{{ grp or 'work' }}" title="{{ name }}">{{ name }}</span>{%- endmacro %}
+
+{% macro field(f, value, lists, req=False) -%}
+{% set key, label, typ, lst = f[0], f[1], f[2], f[3] %}
+<label class="f {{ 'req' if req }} {{ 'spanall' if typ=='area' }}"><span>{{ label }}</span>
+{% if typ=='area' %}<textarea name="{{ key }}" rows="{{ 4 if key=='description' else 2 }}">{{ value or '' }}</textarea>
+{% elif typ=='select' %}<select name="{{ key }}"><option value=""></option>
+  {% for v in lists.get(lst, []) %}<option {{ 'selected' if v==value }}>{{ v }}</option>{% endfor %}
+  {% if value and value not in lists.get(lst, []) %}<option selected>{{ value }}</option>{% endif %}</select>
+{% elif typ=='list' %}<input name="{{ key }}" value="{{ value or '' }}" list="dl-{{ lst }}" autocomplete="off">
+{% elif typ=='date' %}<input name="{{ key }}" type="date" value="{{ (value or '')[:10] }}">
+{% elif typ=='int' %}<input name="{{ key }}" inputmode="numeric" value="{{ value or '' }}">
+{% else %}<input name="{{ key }}" value="{{ value or '' }}">{% endif %}
+</label>
+{%- endmacro %}
+
+{% macro datalists(lists) -%}
+{% for kind, vals in lists.items() %}<datalist id="dl-{{ kind }}">{% for v in vals %}<option value="{{ v }}">{% endfor %}</datalist>{% endfor %}
+{%- endmacro %}

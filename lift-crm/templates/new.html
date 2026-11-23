@@ -1,0 +1,34 @@
+{% extends "base.html" %}{% from "_macros.html" import field, datalists %}
+{% block title %}Новая рекламация{% endblock %}
+{% block body %}
+<div class="head"><h1>Новая рекламация</h1><span class="muted">номер и дата присвоятся автоматически</span></div>
+<form method="post" id="nf" class="newwrap">
+  <div class="panel pad">
+    <div class="grid g2">
+      {% for f in fields %}
+        {% if f[0]=='serials' %}
+        <label class="f"><span>Заводской № ЛО (через запятую)</span><input name="serials" id="serials" autocomplete="off" placeholder="740160342">
+          <div class="serial-hist" id="serialHist"></div></label>
+        {% else %}{{ field(f, '', lists, req=f[0] in ('company','description')) }}{% endif %}
+      {% endfor %}
+      <label class="f"><span>Ответственный</span><select name="responsible_id"><option value="">— назначить позже —</option>
+        {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}</select></label>
+      <label class="f"><span>Дата поступления</span><input type="date" name="received_date" value="{{ today }}"></label>
+    </div>
+    <div class="actions">
+      <button class="btn primary big" name="open" value="1">Зарегистрировать и открыть</button>
+      <button class="btn big">Зарегистрировать и создать ещё</button>
+      <label class="check"><input type="checkbox" name="notify" value="1" checked> отправить клиенту подтверждение с номером</label>
+      <label class="check"><input type="checkbox" name="take" value="1"> взять в работу себе</label>
+    </div>
+  </div>
+  <div class="panel pad paste">
+    <h2>Текст письма</h2>
+    <p class="hint">Вставьте сюда письмо клиента целиком (Ctrl+V) — система сама найдёт заводские номера, адрес, телефон, компанию и узел и подставит их в форму. Проверьте подсвеченные поля.</p>
+    <textarea name="raw_email" id="raw" placeholder="От: ivanov@lift.ru&#10;Тема: Неисправность лифта&#10;&#10;Просим заменить отводной блок, зав. № 740160342, г. Ярославль, ул. Лескова, 42, п. 2…"></textarea>
+    <div class="row" style="margin-top:10px"><button type="button" class="btn" id="parseBtn">Распознать ещё раз</button><span class="small muted" id="parseRes"></span></div>
+  </div>
+  {{ datalists(lists) }}
+</form>
+{% endblock %}
+{% block scripts %}<script>initNewForm();</script>{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Дашборд{% endblock %}
+{% macro bars(items, link=None, color=None) -%}
+  {% set mx = (items|map(attribute='n')|max) if items else 1 %}
+  <div class="bars">{% for r in items %}
+    <div class="bar"><span class="n" title="{{ r.name }}">{% if link %}<a href="{{ url_for('claims', view='all', **{link: r.name}) }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}</span>
+      <span class="track"><span class="fill" style="width:{{ (100*r.n/mx)|round(1) }}%{{ ';background:' ~ color if color }}"></span></span><span class="c">{{ r.n }}</span></div>
+  {% else %}<div class="muted small">нет данных</div>{% endfor %}</div>
+{%- endmacro %}
+{% block body %}
+{% set k = s.k %}
+<div class="head"><h1>Дашборд</h1><div class="grow"></div>{% include "_period.html" %}</div>
+
+<div class="kpis">
+  <div class="panel kpi"><div class="l">Поступило за период</div><div class="v">{{ k.received }}</div><div class="s">лифтов в заявках: {{ k.lifts or 0 }}</div></div>
+  <div class="panel kpi"><div class="l">Из них закрыто</div><div class="v">{{ k.closed }}</div>
+    <div class="s">{% if k.warranty or k.refusal %}гарантия {{ k.warranty }} · отказ {{ k.refusal }}{% endif %}</div></div>
+  <div class="panel kpi"><a href="{{ url_for('claims', view='open') }}"><div class="l">В работе сейчас</div><div class="v">{{ k.open_now }}</div></a>
+    <div class="s">без ответственного: <a href="{{ url_for('claims', view='new') }}">{{ k.unassigned }}</a></div></div>
+  <div class="panel kpi {{ 'alert' if k.overdue }}"><a href="{{ url_for('claims', view='overdue') }}"><div class="l">Просрочено</div><div class="v">{{ k.overdue }}</div></a>
+    <div class="s">{% if k.open_now %}{{ (100*k.overdue/k.open_now)|round|int }}% от открытых{% endif %}</div></div>
+  <div class="panel kpi"><div class="l">Срок отработки, медиана</div><div class="v">{{ k.lead_median if k.lead_median is not none else '—' }}<span class="small muted"> дн</span></div>
+    <div class="s">{% if k.lead_median is not none %}среднее {{ k.lead_avg }} дн{% else %}появится по мере закрытия в CRM{% endif %}</div></div>
+  <div class="panel kpi"><div class="l">Закрыто в срок ≤ {{ sla }} дн</div><div class="v">{{ k.sla_ok ~ '%' if k.sla_ok is not none else '—' }}</div>
+    <div class="s">по рекламациям с датой закрытия</div></div>
+</div>
+
+<div class="dgrid">
+  <div class="panel pad wide">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Поступление и закрытие по месяцам</h2>
+      <div class="legend"><span><i style="background:var(--accent)"></i>поступило</span><span><i style="background:#93c5fd"></i>из них закрыто</span></div></div>
+    {% set mx = [ (s.monthly|map(attribute='received')|max) if s.monthly else 1, (s.monthly|map(attribute='closed')|max) if s.monthly else 1, 1]|max %}
+    <div class="cols">{% for m in s.monthly %}<div class="m"><div class="pair">
+      <div class="col" style="height:{{ (100*m.received/mx)|round(1) }}%" data-v="{{ m.received }}"></div>
+      <div class="col b" style="height:{{ (100*m.closed/mx)|round(1) }}%" data-v="{{ m.closed }}"></div></div></div>{% endfor %}</div>
+    <div class="cols-x">{% for m in s.monthly %}<span>{{ m.m[5:7] }}.{{ m.m[2:4] }}<br><b style="color:var(--text)">{{ m.received }}</b> / {{ m.closed }}</span>{% endfor %}</div>
+  </div>
+
+  <div class="panel pad"><h2>Открытые по статусам</h2>{{ bars(s.by_status, 'status') }}</div>
+  <div class="panel pad"><h2>Нагрузка по ответственным</h2>
+    {% set mx = (s.by_resp|map(attribute='n')|max) if s.by_resp else 1 %}
+    <div class="bars">{% for r in s.by_resp %}<div class="bar"><span class="n">{{ r.name }}</span>
+      <span class="track"><span class="fill o" style="width:{{ (100*r.overdue/mx)|round(1) }}%"></span><span class="fill" style="width:{{ (100*(r.n-r.overdue)/mx)|round(1) }}%;border-radius:0"></span></span>
+      <span class="c">{{ r.n }}</span></div>{% else %}<div class="muted small">нет открытых</div>{% endfor %}</div>
+    <div class="legend" style="margin-top:10px"><span><i style="background:var(--bad)"></i>просрочено</span><span><i style="background:var(--accent)"></i>в срок</span></div>
+  </div>
+  <div class="panel pad"><h2>Возраст открытых рекламаций</h2>{{ bars(s.aging, None, '#d97706') }}</div>
+  <div class="panel pad"><h2>Причина (подтверждена заводом)</h2>{{ bars(s.by_reason) }}</div>
+  <div class="panel pad"><h2>Топ узлов</h2>{{ bars(s.by_node, 'node') }}</div>
+  <div class="panel pad"><h2>Топ компаний</h2>{{ bars(s.by_company, 'company') }}</div>
+  <div class="panel pad"><h2>Заявленная неисправность</h2>{{ bars(s.by_declared) }}</div>
+  <div class="panel pad"><h2>Исполнители / поставщики</h2>{{ bars(s.by_supplier) }}</div>
+  <div class="panel pad"><h2>Принадлежность и характер проблемы</h2>
+    {% for grp, title in [(s.by_own,'Принадлежность'),(s.by_problem,'Характер')] %}
+      {% set tot = grp|sum(attribute='n') or 1 %}
+      <div class="small muted" style="margin-top:6px">{{ title }}</div>
+      <div class="seg">{% for r in grp %}<div title="{{ r.name }}: {{ r.n }}" style="width:{{ 100*r.n/tot }}%;background:{{ ['#2457c5','#93c5fd','#cbd5e1'][loop.index0] }}"></div>{% endfor %}</div>
+      <div class="legend">{% for r in grp %}<span><i style="background:{{ ['#2457c5','#93c5fd','#cbd5e1'][loop.index0] }}"></i>{{ r.name }} — {{ r.n }} ({{ (100*r.n/tot)|round|int }}%)</span>{% endfor %}</div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

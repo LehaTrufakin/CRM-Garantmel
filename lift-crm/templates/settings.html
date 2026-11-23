@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Настройки{% endblock %}
+{% block body %}
+<div class="head"><h1>Настройки</h1></div>
+<div class="stabs">{% for k, l in [('users','Сотрудники'),('statuses','Статусы и сроки'),('templates','Шаблоны писем'),('lists','Справочники'),('integrations','Почта и Трекер'),('import','Импорт реестра')] %}
+  <a class="{{ 'on' if tab==k }}" href="?tab={{ k }}">{{ l }}</a>{% endfor %}</div>
+
+{% if tab=='users' %}
+<div class="panel pad">
+  <p class="muted small">Ответственные из вашего реестра уже добавлены. Чтобы сотрудник мог входить — задайте пароль. «Логин в Трекере» нужен для передачи исполнителя в задачу.</p>
+  {% for u in users + [{'id':'','name':'','login':'','email':'','role':'engineer','tracker_login':'','active':1}] %}
+  <details class="u" {{ 'open' if not u.id }}><summary>{% if u.id %}<b>{{ u.name }}</b><span class="muted small">{{ u.login }} · {{ {'admin':'администратор','engineer':'инженер','viewer':'просмотр'}[u.role] }}{{ ' · отключён' if not u.active }}{{ ' · без пароля' if not u.password_hash }}</span>{% else %}<b>+ Добавить сотрудника</b>{% endif %}</summary>
+    <form method="post" class="grid g4" style="padding:8px 4px 16px">
+      <input type="hidden" name="action" value="user_save"><input type="hidden" name="id" value="{{ u.id }}">
+      <label class="f"><span>ФИО</span><input name="name" value="{{ u.name }}" required></label>
+      <label class="f"><span>Логин</span><input name="login" value="{{ u.login }}" required></label>
+      <label class="f"><span>E-mail</span><input name="email" value="{{ u.email or '' }}"></label>
+      <label class="f"><span>Логин в Трекере</span><input name="tracker_login" value="{{ u.tracker_login or '' }}"></label>
+      <label class="f"><span>Роль</span><select name="role">{% for r, l in [('engineer','инженер'),('admin','администратор'),('viewer','только просмотр')] %}<option value="{{ r }}" {{ 'selected' if u.role==r }}>{{ l }}</option>{% endfor %}</select></label>
+      <label class="f"><span>{{ 'Новый пароль' if u.id else 'Пароль' }}</span><input name="password" type="password" autocomplete="new-password"></label>
+      <label class="check" style="align-self:end"><input type="checkbox" name="active" value="1" {{ 'checked' if u.active }}> активен</label>
+      <div style="align-self:end"><button class="btn primary">Сохранить</button></div>
+    </form></details>
+  {% endfor %}
+</div>
+
+{% elif tab=='statuses' %}
+<form method="post" class="panel"><input type="hidden" name="action" value="statuses">
+  <div class="pad muted small">✉ — автоматически предлагать письмо клиенту при переходе в статус (текст — во вкладке «Шаблоны»). «Статус в Трекере» — ключ статуса очереди, в который будет переведена задача (список ключей — кнопка «Проверить подключение» во вкладке «Почта и Трекер»).</div>
+  <table class="t compact"><thead><tr><th>Статус</th><th>Группа</th><th>✉ клиенту</th><th>Статус в Трекере (key)</th><th>Норматив, дн</th></tr></thead><tbody>
+  {% for st in statuses %}<tr style="cursor:default"><td>{{ st.name }}</td>
+    <td><select name="grp_{{ st.name }}">{% for g, (l, c) in GROUPS.items() %}<option value="{{ g }}" {{ 'selected' if st.grp==g }}>{{ l }}</option>{% endfor %}</select></td>
+    <td><input type="checkbox" name="notify_{{ st.name }}" value="1" {{ 'checked' if st.notify }} style="width:auto"></td>
+    <td><input name="tracker_{{ st.name }}" value="{{ st.tracker_status or '' }}"></td>
+    <td><input name="sla_{{ st.name }}" value="{{ st.sla_days }}" style="width:70px"></td></tr>{% endfor %}
+  <tr style="cursor:default"><td><input name="new_status" placeholder="+ новый статус"></td><td><select name="new_grp">{% for g, (l, c) in GROUPS.items() %}<option value="{{ g }}">{{ l }}</option>{% endfor %}</select></td><td colspan="3"></td></tr>
+  </tbody></table>
+  <div class="pad"><button class="btn primary">Сохранить</button></div>
+</form>
+
+{% elif tab=='templates' %}
+<div class="panel pad">
+  <p class="muted small">Подстановки: {number}, {company}, {address}, {serials}, {node}, {description}, {status}, {comment}, {for_customer}, {responsible}, а также любое поле карточки. Перед отправкой текст можно поправить в окне смены статуса.</p>
+  {% for st in statuses %}{% set t = templates.get(st.name) %}
+  <details class="u" {{ 'open' if request.args.get('s')==st.name }}><summary><b>{{ st.name }}</b><span class="small muted">{{ 'шаблон есть' if t else 'нет шаблона' }}{{ ' · отправка включена' if st.notify }}</span></summary>
+    <form method="post" class="grid" style="padding:8px 4px 16px"><input type="hidden" name="status" value="{{ st.name }}">
+      <label class="f"><span>Тема</span><input name="subject" value="{{ t.subject if t else 'Рекламация № {number}: ' ~ st.name }}"></label>
+      <label class="f"><span>Текст</span><textarea name="body" rows="9">{{ t.body if t else 'Здравствуйте!\n\nСтатус рекламации {number}: ' ~ st.name ~ '.\n{comment}' }}</textarea></label>
+      <div class="row"><button class="btn primary" name="action" value="template">Сохранить</button>{% if t %}<button class="btn danger" name="action" value="template_del">Удалить шаблон</button>{% endif %}</div>
+    </form></details>
+  {% endfor %}
+</div>
+
+{% elif tab=='lists' %}
+<div class="panel pad">
+  <p class="muted small">По одному значению в строке. Новые значения, введённые в карточках, добавляются автоматически.</p>
+  {% for kind, label in list_kinds.items() %}
+  <details class="u"><summary><b>{{ label }}</b><span class="small muted">{{ lists.get(kind, [])|length }} знач.</span></summary>
+    <form method="post" style="padding:8px 4px 16px"><input type="hidden" name="action" value="lists"><input type="hidden" name="kind" value="{{ kind }}">
+      <textarea name="values" rows="12">{{ lists.get(kind, [])|join('\n') }}</textarea>
+      <div style="margin-top:8px"><button class="btn primary">Сохранить</button></div></form></details>
+  {% endfor %}
+</div>
+
+{% elif tab=='integrations' %}
+<form method="post" class="grid" style="gap:16px"><input type="hidden" name="action" value="integrations">
+  <div class="panel pad">
+    <h2>Общие</h2>
+    <div class="grid g4">
+      <label class="f"><span>Префикс номера</span><input name="number_prefix" value="{{ s.number_prefix }}"></label>
+      <label class="f"><span>Срок отработки, дней</span><input name="sla_days" value="{{ s.sla_days }}"></label>
+      <label class="check"><input type="checkbox" name="autoreply_enabled" value="1" {{ 'checked' if s.autoreply_enabled }}> автоответы клиентам</label>
+      <label class="check"><input type="checkbox" name="notify_responsible" value="1" {{ 'checked' if s.notify_responsible }}> письмо сотруднику при назначении</label>
+    </div>
+  </div>
+  <div class="panel pad">
+    <h2>Почта</h2>
+    <p class="muted small">Ящик, куда приходят рекламации. Каждое новое письмо → новая рекламация; ответ клиента (по номеру в теме или цепочке) → в существующую. Для Яндекс 360 нужен пароль приложения.</p>
+    <label class="check"><input type="checkbox" name="mail_enabled" value="1" {{ 'checked' if s.mail_enabled }}> принимать письма</label>
+    <div class="grid g4" style="margin-top:10px">
+      <label class="f"><span>IMAP сервер</span><input name="imap_host" value="{{ s.imap_host }}"></label>
+      <label class="f"><span>IMAP порт</span><input name="imap_port" value="{{ s.imap_port }}"></label>
+      <label class="f"><span>Логин</span><input name="imap_user" value="{{ s.imap_user }}"></label>
+      <label class="f"><span>Пароль {{ '(задан)' if s.imap_password }}</span><input name="imap_password" type="password" autocomplete="new-password"></label>
+      <label class="f"><span>Папка</span><input name="imap_folder" value="{{ s.imap_folder }}"></label>
+      <label class="f"><span>Проверять каждые, мин</span><input name="mail_interval_min" value="{{ s.mail_interval_min }}"></label>
+      <label class="f span2"><span>Не регистрировать письма от (через запятую)</span><input name="mail_ignore_from" value="{{ s.mail_ignore_from }}" placeholder="noreply@, @tracker.yandex.ru"></label>
+      <label class="f"><span>SMTP сервер</span><input name="smtp_host" value="{{ s.smtp_host }}"></label>
+      <label class="f"><span>SMTP порт</span><input name="smtp_port" value="{{ s.smtp_port }}"></label>
+      <label class="f"><span>SMTP логин</span><input name="smtp_user" value="{{ s.smtp_user }}"></label>
+      <label class="f"><span>SMTP пароль {{ '(задан)' if s.smtp_password }}</span><input name="smtp_password" type="password" autocomplete="new-password"></label>
+      <label class="f span2"><span>Отправитель (From)</span><input name="smtp_from" value="{{ s.smtp_from }}" placeholder="Служба рекламаций <reklamacii@company.ru>"></label>
+      <div class="row span2" style="align-self:end"><input id="mtTo" placeholder="куда отправить тест" style="width:220px"><button type="button" class="btn" onclick="testMail()">Отправить тест</button><span id="mtRes" class="small"></span></div>
+    </div>
+  </div>
+  <div class="panel pad">
+    <h2>Яндекс Трекер</h2>
+    <p class="muted small">OAuth-токен: oauth.yandex.ru → приложение с правами tracker:read / tracker:write. ID организации — в Трекере: Администрирование → Организации.</p>
+    <label class="check"><input type="checkbox" name="tracker_enabled" value="1" {{ 'checked' if s.tracker_enabled }}> интеграция включена</label>
+    <div class="grid g4" style="margin-top:10px">
+      <label class="f"><span>OAuth токен {{ '(задан)' if s.tracker_token }}</span><input name="tracker_token" type="password" autocomplete="new-password"></label>
+      <label class="f"><span>ID организации</span><input name="tracker_org_id" value="{{ s.tracker_org_id }}"></label>
+      <label class="f"><span>Очередь</span><input name="tracker_queue" value="{{ s.tracker_queue }}"></label>
+      <label class="check"><input type="checkbox" name="tracker_cloud_org" value="1" {{ 'checked' if s.tracker_cloud_org }}> организация Yandex Cloud</label>
+      <label class="check span2"><input type="checkbox" name="tracker_push" value="1" {{ 'checked' if s.tracker_push }}> создавать задачи и переводить статусы в Трекере</label>
+      <label class="check span2"><input type="checkbox" name="tracker_pull" value="1" {{ 'checked' if s.tracker_pull }}> забирать изменения статусов/исполнителей из Трекера</label>
+      <label class="check spanall"><input type="checkbox" name="tracker_pull_new" value="1" {{ 'checked' if s.tracker_pull_new }}> регистрировать в CRM задачи, созданные в Трекере (на переходный период, пока почта ещё идёт в Трекер; приём почты в CRM тогда выключите)</label>
+      <label class="f spanall"><span>Доп. поля в Трекер (JSON: поле CRM → id поля Трекера), необязательно</span><textarea name="tracker_field_map" rows="2" placeholder='{"serials": "zavodskoyNomer", "company": "kompaniya"}'>{{ s.tracker_field_map|tojson if s.tracker_field_map else '' }}</textarea></label>
+      <div class="row spanall"><button type="button" class="btn" onclick="testTracker()">Проверить подключение</button><span class="small muted">последняя синхронизация: {{ s.tracker_last_sync or '—' }}</span></div>
+      <div class="spanall small" id="ttRes"></div>
+    </div>
+  </div>
+  <div><button class="btn primary big">Сохранить настройки</button></div>
+</form>
+
+{% elif tab=='import' %}
+<form method="post" enctype="multipart/form-data" class="panel pad grid" style="max-width:620px">
+  <input type="hidden" name="action" value="import">
+  <p>Загрузите реестр в формате .xlsx (как текущая Google-таблица: листы «Рекламации…», заголовки во 2-й строке). Справочники и ответственные берутся с листа «данные для списков».</p>
+  <p class="small" style="color:var(--warn)">Импорт добавляет записи — не загружайте один и тот же файл дважды.</p>
+  <input type="file" name="file" accept=".xlsx" required>
+  <div><button class="btn primary">Импортировать</button></div>
+</form>
+{% endif %}
+{% endblock %}

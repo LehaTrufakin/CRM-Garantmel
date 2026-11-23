@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Отчёты{% endblock %}
+{% block body %}
+<div class="head"><h1>Отчёты</h1><div class="grow"></div>
+  <a class="btn" href="{{ url_for('reports', **dict(request.args, xlsx=1, dim=dim)) }}">⭳ Этот отчёт в Excel</a>
+  <a class="btn" href="{{ url_for('claims_export', view='all') }}">⭳ Полный реестр</a></div>
+<div class="row" style="margin-bottom:12px">{% include "_period.html" %}</div>
+<div class="views">{% for k, l in dims.items() %}<a class="{{ 'on' if dim==k }}" href="{{ url_for('reports', **dict(request.args, dim=k)) }}">{{ l }}</a>{% endfor %}</div>
+<div class="panel">
+  <table class="t">
+    <thead><tr><th>{{ dims[dim] }}</th><th class="r">Всего</th><th class="r">Закрыто</th><th class="r">В работе</th><th class="r">Просрочено</th>
+      <th class="r">Гарантия</th><th class="r">Отказ</th><th class="r">Системные</th><th class="r">Ср. срок, дн</th><th class="r">В срок ≤{{ sla }} дн</th></tr></thead>
+    <tbody>
+    {% set tot = rows|sum(attribute='total') or 1 %}
+    {% for r in rows %}<tr style="cursor:default">
+      <td>{{ r.name }}<div class="track" style="height:4px;background:#f0f2f5;margin-top:4px;border-radius:2px"><div style="height:4px;width:{{ 100*r.total/(rows|map(attribute='total')|max) }}%;background:var(--accent);border-radius:2px"></div></div></td>
+      <td class="r"><b>{{ r.total }}</b> <span class="small faint">{{ (100*r.total/tot)|round(1) }}%</span></td><td class="r">{{ r.closed }}</td><td class="r">{{ r.open }}</td>
+      <td class="r {{ 'overdue' if r.overdue }}">{{ r.overdue or '' }}</td><td class="r">{{ r.warranty or '' }}</td><td class="r">{{ r.refusal or '' }}</td>
+      <td class="r">{{ r.systemic or '' }}</td><td class="r">{{ r.lead if r.lead is not none else '' }}</td>
+      <td class="r">{{ ((100*r.in_sla/r.with_lead)|round|int ~ '%') if r.with_lead else '' }}</td></tr>
+    {% else %}<tr><td colspan="10" class="empty">нет данных за период</td></tr>{% endfor %}
+    </tbody>
+    {% if rows %}<tfoot><tr><th>Итого</th><th class="r">{{ rows|sum(attribute='total') }}</th><th class="r">{{ rows|sum(attribute='closed') }}</th><th class="r">{{ rows|sum(attribute='open') }}</th>
+      <th class="r">{{ rows|sum(attribute='overdue') }}</th><th class="r">{{ rows|sum(attribute='warranty') }}</th><th class="r">{{ rows|sum(attribute='refusal') }}</th><th class="r">{{ rows|sum(attribute='systemic') }}</th><th></th><th></th></tr></tfoot>{% endif %}
+  </table>
+</div>
+{% endblock %}

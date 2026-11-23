@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block body %}
+<div class="head"><h1>Профиль</h1></div>
+<form method="post" class="panel pad grid" style="max-width:420px">
+  <label class="f"><span>Имя</span><input value="{{ user.name }}" disabled></label>
+  <label class="f"><span>E-mail (для уведомлений о назначении)</span><input name="email" value="{{ user.email or '' }}"></label>
+  <label class="f"><span>Новый пароль</span><input name="password" type="password" autocomplete="new-password"></label>
+  <div><button class="btn primary">Сохранить</button></div>
+</form>{% endblock %}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Рекламации{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="logo">Рекламации<small>учёт и отработка</small></div>
+    {% if can_edit %}<a class="btn primary btn-new" href="{{ url_for('new_claim') }}">+ Новая рекламация</a>{% endif %}
+    {% set ep = request.endpoint or '' %}
+    <a class="nav {{ 'on' if ep in ('claims','claim') }}" href="{{ url_for('claims') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>Реестр</a>
+    <a class="nav {{ 'on' if ep=='dashboard' }}" href="{{ url_for('dashboard') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>Дашборд</a>
+    <a class="nav {{ 'on' if ep=='reports' }}" href="{{ url_for('reports') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5"/></svg>Отчёты</a>
+    {% if user and user.role=='admin' %}
+    <a class="nav {{ 'on' if ep=='settings' }}" href="{{ url_for('settings') }}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Настройки</a>
+    {% endif %}
+    {% if user %}
+    <div class="bottom">
+      <a href="{{ url_for('me') }}">{{ user.name }}</a> · <a href="{{ url_for('logout') }}">выйти</a>
+      <form method="post" action="{{ url_for('sync_now') }}"><button class="btn sm" title="Проверить почту и Трекер сейчас">⟳ Проверить почту / Трекер</button></form>
+    </div>
+    {% endif %}
+  </aside>
+  <main class="main">
+    {% for cat, msg in get_flashed_messages(with_categories=true) %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+    {% block body %}{% endblock %}
+  </main>
+</div>
+<script src="{{ url_for('static', filename='app.js') }}?v=3"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

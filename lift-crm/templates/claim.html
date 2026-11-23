@@ -1,0 +1,127 @@
+{% extends "base.html" %}{% from "_macros.html" import field, datalists, badge %}
+{% block title %}{{ c.number }} — {{ c.company or 'рекламация' }}{% endblock %}
+{% block body %}
+<div class="chead">
+  <div style="flex:1;min-width:300px">
+    <h1>{{ c.number }} {{ badge(c.status, st.grp) }}</h1>
+    <div class="meta">
+      <span>поступила {{ c.received_date|d }}</span>
+      <span class="{{ 'overdue' if overdue }}">срок {{ c.deadline|d or '—' }}{{ ' — просрочено' if overdue }}</span>
+      {% if c.incoming_no %}<span>вх. {{ c.incoming_no }}</span>{% endif %}
+      {% if tracker_url %}<span><a href="{{ tracker_url }}" target="_blank">{{ c.tracker_key }} ↗</a></span>{% endif %}
+      <span>источник: {{ {'manual':'вручную','email':'почта','tracker':'Трекер','import':'реестр'}.get(c.source, c.source) }}</span>
+    </div>
+  </div>
+  <div class="row">
+    <label class="f" style="min-width:230px"><span>Ответственный</span>
+      <select id="resp" {{ 'disabled' if not can_edit }}><option value="">— не назначен —</option>
+        {% for u in users %}<option value="{{ u.id }}" {{ 'selected' if u.id==c.responsible_id }}>{{ u.name }}</option>{% endfor %}</select></label>
+    {% if can_edit and not c.responsible_id %}<button class="btn" style="align-self:flex-end" onclick="takeMe({{ user.id }})">Взять себе</button>{% endif %}
+    <a class="btn ghost" style="align-self:flex-end" href="{{ url_for('claim_copy', cid=c.id) }}" title="Новая рекламация по этому же объекту">⧉ Копия</a>
+  </div>
+</div>
+
+<div class="cwrap">
+  <div class="panel">
+    {% if can_edit %}
+    <div class="steps">
+      <span class="lbl">Следующий шаг:</span>
+      {% for s in next_steps %}{% set sx = smap.get(s, {}) %}
+        <button class="btn {{ 'primary' if loop.first }}" onclick="askStatus('{{ s }}')">{{ s }}{% if sx.notify %} ✉{% endif %}</button>
+      {% endfor %}
+      <select onchange="if(this.value){askStatus(this.value);this.value=''}" style="width:auto">
+        <option value="">другой статус…</option>
+        {% for s in statuses if s.name != c.status %}<option value="{{ s.name }}">{{ s.name }}{{ ' ✉' if s.notify }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
+    <form method="post" action="{{ url_for('claim_save', cid=c.id) }}" id="cf">
+      <div class="tabs">{% for key, title in sections %}<button type="button" data-tab="{{ key }}" class="{{ 'on' if loop.first }}">{{ title }}</button>{% endfor %}</div>
+      {% for key, title in sections %}
+      <div class="tabpane {{ 'on' if loop.first }}" id="tab-{{ key }}">
+        <div class="grid g2">
+          {% for f in fields if f[4]==key %}{{ field(f, c[f[0]], lists) }}{% endfor %}
+          {% if key=='close' %}<label class="f"><span>Контрольный срок</span><input type="date" name="deadline" value="{{ (c.deadline or '')[:10] }}"></label>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if can_edit %}<div class="savebar" id="savebar"><button class="btn primary">Сохранить</button><span class="st" id="saveSt">Ctrl+S — сохранить</span></div>{% endif %}
+      {{ datalists(lists) }}
+    </form>
+  </div>
+
+  <div>
+    {% set incoming = emails|selectattr('direction','equalto','in')|list %}
+    {% if incoming %}
+    <div class="panel pad side-card">
+      <h3>Обращение клиента</h3>
+      {% set e = incoming[0] %}
+      <div class="mail"><div class="mh"><span>{{ e.sender or '' }}</span><span>{{ e.sent_at|dt }}</span></div>
+        <div><b>{{ e.subject or '' }}</b></div><div class="mb">{{ e.body }}</div>
+        {% if e.files %}<div class="files" style="margin-top:8px">{% for fn in e.files %}<a href="{{ url_for('claim_file', cid=c.id, name=fn) }}" target="_blank">📎 {{ fn }}</a>{% endfor %}</div>{% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="panel pad side-card" id="feed">
+      <h3>Переписка и история</h3>
+      <form method="post" action="{{ url_for('claim_comment', cid=c.id) }}" class="row" style="margin-bottom:10px">
+        <textarea name="text" rows="1" placeholder="Комментарий для коллег…" style="flex:1" required></textarea>
+        <button class="btn">Добавить</button>
+      </form>
+      {% if can_edit %}<div class="row" style="margin-bottom:10px">
+        <button class="btn sm" onclick="document.getElementById('mailDlg').showModal()">✉ Написать клиенту</button>
+        <form method="post" enctype="multipart/form-data" action="{{ url_for('claim_upload', cid=c.id) }}" class="row">
+          <label class="btn sm">📎 Файлы<input type="file" name="files" multiple hidden onchange="this.form.submit()"></label></form>
+      </div>{% endif %}
+      {% if files %}<div class="files">{% for fn in files %}<a href="{{ url_for('claim_file', cid=c.id, name=fn) }}" target="_blank">📎 {{ fn }}</a>{% endfor %}</div>{% endif %}
+      {% set first_id = incoming[0].id if incoming else 0 %}
+      {% for e in emails if e.id != first_id %}{% if loop.first %}<div style="margin:6px 0 4px" class="small muted">Письма</div>{% endif %}
+        <details class="mail {{ e.direction }}"><summary class="mh"><span>{{ '→ ' ~ e.recipients if e.direction=='out' else '← ' ~ e.sender }} · {{ e.subject }}</span><span>{{ e.sent_at|dt }}</span></summary>
+          <div class="mb">{{ e.body }}</div>
+          {% if e.files %}<div class="files">{% for fn in e.files %}<a href="{{ url_for('claim_file', cid=c.id, name=fn) }}" target="_blank">📎 {{ fn }}</a>{% endfor %}</div>{% endif %}</details>
+      {% endfor %}
+      <ul class="feed">
+        {% for h in hist %}<li class="k-{{ h.kind }}"><span class="ic"></span><div><div class="who">{{ h.ts|dt }} · {{ h.user_name }}</div><div class="tx">{{ h.text }}</div></div></li>{% endfor %}
+      </ul>
+    </div>
+
+    {% if same %}
+    <div class="panel pad side-card">
+      <h3>Другие рекламации по этому лифту</h3>
+      <table class="t compact"><tbody>{% for s in same %}<tr onclick="location='{{ url_for('claim', cid=s.id) }}'">
+        <td class="num">{{ s.number }}</td><td>{{ s.received_date|d }}</td><td>{{ s.node or '' }}</td><td class="small">{{ s.status }}</td></tr>{% endfor %}</tbody></table>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<dialog id="stDlg"><form method="post" action="{{ url_for('claim_status', cid=c.id) }}">
+  <div class="dh">Статус: <span id="stName"></span></div>
+  <div class="db">
+    <input type="hidden" name="status" id="stInput">
+    <label class="f"><span>Комментарий (попадёт в историю и в письмо)</span><textarea name="comment" id="stComment" rows="2"></textarea></label>
+    <label class="check"><input type="checkbox" name="send_mail" value="1" id="stSend"> отправить письмо клиенту</label>
+    <div id="mailBox" class="grid">
+      <label class="f"><span>Кому</span><input name="mail_to" id="mTo"></label>
+      <label class="f"><span>Тема</span><input name="mail_subject" id="mSubj"></label>
+      <label class="f"><span>Текст письма</span><textarea name="mail_body" id="mBody" rows="9"></textarea></label>
+    </div>
+    {% if not c.responsible_id %}<label class="check"><input type="checkbox" name="take" value="1" checked> назначить меня ответственным</label>{% endif %}
+  </div>
+  <div class="df"><button type="button" class="btn" onclick="stDlg.close()">Отмена</button><button class="btn primary">Применить</button></div>
+</form></dialog>
+
+<dialog id="mailDlg"><form method="post" action="{{ url_for('claim_mail', cid=c.id) }}">
+  <div class="dh">Письмо клиенту</div>
+  <div class="db">
+    <label class="f"><span>Кому</span><input name="to" value="{{ c.client_email or '' }}" required></label>
+    <label class="f"><span>Тема</span><input name="subject" value="Рекламация № {{ c.number }}"></label>
+    <label class="f"><span>Текст</span><textarea name="body" rows="10" required>Здравствуйте!
+
+</textarea></label>
+  </div>
+  <div class="df"><button type="button" class="btn" onclick="mailDlg.close()">Отмена</button><button class="btn primary">Отправить</button></div>
+</form></dialog>
+{% endblock %}
+{% block scripts %}<script>initClaim({{ c.id }});</script>{% endblock %}
